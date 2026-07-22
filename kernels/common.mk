@@ -21,6 +21,16 @@ MU_OBJDUMP  = $(LLVM_MUON)/bin/llvm-objdump
 MU_OBJCOPY  = $(LLVM_MUON)/bin/llvm-objcopy
 
 MU_CFLAGS += --sysroot=$(LLVM_MUON)
+# llvm-muon has libc++'s C++ headers but no real C library headers of its own
+# (its libc's install-libc-headers step is skipped in overlay build mode).
+# Clang's stdlib.h/math.h wrapper shims use #include_next to pull in the rest
+# (ldiv_t, FP_NAN, ...) from a real C library; point that at RISCV_SYSROOT,
+# the real newlib-based toolchain sysroot, same as lib/Makefile already does.
+# Must be -idirafter, not -isystem: libc++'s own C++ wrapper headers must be
+# found FIRST, with the real C headers only consulted as a last-resort
+# #include_next fallback. -isystem here ranks ahead of libc++'s own search
+# path and shadows it, which libc++ detects and hard-errors on.
+MU_CFLAGS += -idirafter $(RISCV_SYSROOT)/include
 MU_CFLAGS += -Xclang -target-feature -Xclang +vortex
 MU_CFLAGS += -march=rv32im_zfinx_zhinx -mabi=ilp32
 MU_CFLAGS += -O3 -std=c++20
