@@ -16,7 +16,14 @@ objfile="${binfile%.bin}.o"
 
 sanitized_bin="$(printf '%s' "$binfile" | sed 's/[^A-Za-z0-9_]/_/g')"
 
-llvm-objcopy \
+# llvm-objcopy only exists in our built llvm-muon toolchain, not on $PATH.
+# Resolve it the same way common.mk resolves LLVM_MUON (relative to this
+# kernel's directory), so this doesn't depend on the caller's environment.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LLVM_MUON="${LLVM_MUON:-$(realpath "$SCRIPT_DIR/../../llvm/llvm-muon")}"
+LLVM_OBJCOPY="$LLVM_MUON/bin/llvm-objcopy"
+
+"$LLVM_OBJCOPY" \
     -I binary \
     -O elf32-littleriscv \
     -B riscv \

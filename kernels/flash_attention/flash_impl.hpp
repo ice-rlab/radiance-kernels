@@ -71,7 +71,13 @@ inline void rowmax(const _Float16 *tensor, _Float16 *rowmax, _Float16 *scratch,
         _Float16 max_per_thread = load16_shared(elem_addr);
         for (int i = 0; i < col_iter; i++) {
             const auto elem = load16_shared(elem_addr);
-            max_per_thread = fmax(elem, max_per_thread);
+            // _Float16 -> float and _Float16 -> double are both "conversions"
+            // (not promotions) in C++ overload ranking, so they tie and
+            // fmax(_Float16, _Float16) is genuinely ambiguous between libc++'s
+            // float/long double overloads and math.h's plain double one.
+            // Cast to float explicitly to disambiguate (still NaN-aware,
+            // unlike a plain > comparison).
+            max_per_thread = fmax(static_cast<float>(elem), static_cast<float>(max_per_thread));
             elem_addr += NT;
         }
 
@@ -83,7 +89,8 @@ inline void rowmax(const _Float16 *tensor, _Float16 *rowmax, _Float16 *scratch,
             _Float16 max = load16_shared(temp_addr);
             for (int i = 0; i < NT; i++) {
                 const auto elem = load16_shared(temp_addr);
-                max = fmax(elem, max);
+                // Same _Float16 ambiguity as above; cast to disambiguate.
+                max = fmax(static_cast<float>(elem), static_cast<float>(max));
                 temp_addr++;
             }
             auto result_addr = &rowmax[row];
