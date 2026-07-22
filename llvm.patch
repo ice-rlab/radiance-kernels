@@ -1,0 +1,76 @@
+diff --git a/build.sh b/build.sh
+index a5af28a6ce23..1de680b94d32 100755
+--- a/build.sh
++++ b/build.sh
+@@ -2,7 +2,14 @@
+ # Assumes current dir is build dir
+ LLVM_PREBUILT="$1"
+ MUON_LLVM_INSTALL="$2"
+-RUNTIME_SYSROOT="/opt/riscv/sysroot/usr"
++# Was hardcoded to "/opt/riscv/sysroot/usr", which doesn't exist on this
++# machine. Overlay-mode libc (LLVM_LIBC_FULL_BUILD=OFF) doesn't generate its
++# own public headers (see add_gen_header in LLVMLibCHeaderRules.cmake) and
++# expects a real sysroot's headers (errno.h, fenv.h, stdio.h, etc.) instead.
++# RISCV_TOOLCHAIN_PATH's riscv32-unknown-elf dir is exactly that: a real
++# bare-metal RV32 sysroot, already required and exported per the top-level
++# README setup step.
++RUNTIME_SYSROOT="${RISCV_TOOLCHAIN_PATH}/riscv32-unknown-elf"
+ SYSROOT_OVERLAY="$PWD/sysroot-overlay"
+ mkdir -p "$SYSROOT_OVERLAY/include/gnu"
+ cat > "$SYSROOT_OVERLAY/include/gnu/stubs-ilp32.h" <<'EOF'
+@@ -13,6 +20,21 @@ CFLAGS="-march=rv32im_zfinx_zhinx --sysroot=$RUNTIME_SYSROOT -isystem $SYSROOT_O
+ CXXFLAGS="-march=rv32im_zfinx_zhinx --sysroot=$RUNTIME_SYSROOT -isystem $SYSROOT_OVERLAY/include -D_POSIX_C_SOURCE=200809L -fPIC"
+ TARGET="riscv32-unknown-elf"
+ 
++# Reverted attempt to drop libc: libcxx's headers (e.g. char_traits.h's EOF)
++# still need libc's headers even when not linking its compiled library, so
++# libc must stay in the runtimes list.
++#
++# Also reverted: RUNTIMES_riscv32-unknown-elf_LLVM_LIBC_FULL_BUILD=ON. It hits
++# a native-tool cross-compilation bug (libc-hdrgen gets built with
++# --target=riscv32-unknown-elf instead of as a host tool). Staying in overlay
++# mode; entrypoints.txt is trimmed instead to drop __stack_chk_fail/abort,
++# which overlay mode never builds anyway.
++#
++# LIBCXX_ENABLE_WIDE_CHARACTERS flipped OFF->ON below: OFF defines
++# _LIBCPP_HAS_NO_WIDE_CHARACTERS, which blocks libcxx's __mbstate_t.h from
++# falling back to <wchar.h>. Our sysroot (newlib-based) only provides
++# mbstate_t via <wchar.h> (no bits/types/mbstate_t.h or uchar.h), so with
++# wide characters off it hit a hard #error trying to find mbstate_t.
+ cmake -G "Ninja" ../llvm \
+ -DLLVM_ENABLE_PROJECTS="clang;lld" \
+ -DLLVM_ENABLE_RUNTIMES="libc;compiler-rt;libcxxabi;libcxx" \
+@@ -56,7 +78,7 @@ cmake -G "Ninja" ../llvm \
+ -DRUNTIMES_riscv32-unknown-elf_LIBCXX_ENABLE_SHARED=OFF \
+ -DRUNTIMES_riscv32-unknown-elf_LIBCXX_ENABLE_THREADS=OFF \
+ -DRUNTIMES_riscv32-unknown-elf_LIBCXX_ENABLE_MONOTONIC_CLOCK=OFF \
+--DRUNTIMES_riscv32-unknown-elf_LIBCXX_ENABLE_WIDE_CHARACTERS=OFF \
++-DRUNTIMES_riscv32-unknown-elf_LIBCXX_ENABLE_WIDE_CHARACTERS=ON \
+ -DRUNTIMES_riscv32-unknown-elf_LIBCXX_ENABLE_LOCALIZATION=OFF \
+ -DRUNTIMES_riscv32-unknown-elf_LIBCXX_ENABLE_FSTREAM=OFF \
+ -DRUNTIMES_riscv32-unknown-elf_LIBCXX_ENABLE_IOSTREAM=OFF \
+diff --git a/libc/config/baremetal/riscv/entrypoints.txt b/libc/config/baremetal/riscv/entrypoints.txt
+index f725b1c2394c..57aa47be427a 100644
+--- a/libc/config/baremetal/riscv/entrypoints.txt
++++ b/libc/config/baremetal/riscv/entrypoints.txt
+@@ -18,7 +18,9 @@ set(TARGET_LIBC_ENTRYPOINTS
+     libc.src.ctype.toupper
+ 
+     # compiler entrypoints (no corresponding header)
+-    libc.src.compiler.__stack_chk_fail
++    # __stack_chk_fail dropped: overlay build mode (LLVM_LIBC_FULL_BUILD=OFF)
++    # never adds the baremetal subdir that implements it; only referenced if
++    # code is compiled with -fstack-protector, which these kernels don't use.
+ 
+     # errno.h entrypoints
+     libc.src.errno.errno
+@@ -74,7 +76,8 @@ set(TARGET_LIBC_ENTRYPOINTS
+     libc.src.stdio.vsnprintf
+ 
+     # stdlib.h entrypoints
+-    libc.src.stdlib.abort
++    # abort dropped: same reason as __stack_chk_fail above (overlay mode
++    # never adds stdlib/baremetal/, which has the real abort.cpp).
+     libc.src.stdlib.abs
+     libc.src.stdlib.atoi
+     libc.src.stdlib.atof
