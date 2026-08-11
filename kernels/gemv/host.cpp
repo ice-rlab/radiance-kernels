@@ -1,7 +1,6 @@
 #include <radiance.h>
 
 int main() {
-#if 0
     WRITE_MMIO_32(RAD_HOST_GPU_RESET, 1);
     tohost = 0;
     *tocpu = tohost;
@@ -13,7 +12,8 @@ int main() {
         SYNC_GPU();
         finished = READ_MMIO_32(RAD_HOST_GPU_ALL_FINISHED);
     }
-#endif
 
+    WRITE_MMIO_32(RAD_HOST_GPU_RESET, 1);
+    tohost = 1;
     return 0;
 }

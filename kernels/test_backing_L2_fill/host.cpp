@@ -76,5 +76,7 @@ int main() {
     write_phase(2);
     gpu_run();
 
+    WRITE_MMIO_32(RAD_HOST_GPU_RESET, 1);
+    tohost = 1;
     return 0;
 }

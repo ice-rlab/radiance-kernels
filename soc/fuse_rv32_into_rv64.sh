@@ -114,6 +114,12 @@ SECTIONS
   } :text
 
   . = ALIGN(4096);
+  .tohost : {
+    *(.tohost)
+    *(.htif)
+  } :data
+
+  . = ALIGN(4096);
   .data : {
     *(.data .data.*)
     *(.sdata .sdata.*)

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-DEFAULT_CONFIG = "RadianceSingleClusterConfig"
+DEFAULT_CONFIG = "RadianceClusterConfig"
 DEFAULT_KERNELS = ("vecadd", "saxpy", "sfilter", "nearn", "gaussian", "bfs")
 DEFAULT_OCCUPANCIES = (1, 2, 4, 8)
 DEFAULT_ILPS = (1, 2, 4, 8)

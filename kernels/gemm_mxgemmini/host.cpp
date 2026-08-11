@@ -3,7 +3,7 @@
 #include <radiance.h>
 
 int main() {
-#if 1
+  WRITE_MMIO_32(RAD_HOST_GPU_RESET, 1);
   tohost = 0;
   *tocpu = tohost;
 
@@ -21,7 +21,8 @@ int main() {
     // printf("%d %d %d %d\n", core0, core1, core2, core3);
   }
   // printf("finished\n");
-#endif
 
+  WRITE_MMIO_32(RAD_HOST_GPU_RESET, 1);
+  tohost = 1;
   return 0;
 }

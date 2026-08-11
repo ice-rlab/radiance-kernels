@@ -9,6 +9,10 @@ static void copy_section(uint32_t offset, uint32_t size_bytes) {
 }
 
 int main() {
+  WRITE_MMIO_32(RAD_HOST_GPU_RESET, 1);
+  tohost = 0;
+  *tocpu = tohost;
+
 // test kernel loading from scratchpad memory
 // #define SPAD_KERNEL
 #ifdef SPAD_KERNEL
@@ -23,6 +27,7 @@ int main() {
 
   // Switch GPU address base to scratchpad
   *GPU_ADDR_OR_MMIO = SPAD_BASE;
+#endif
 
   // Deassert GPU reset
   WRITE_MMIO_32(RAD_HOST_GPU_RESET, 0);
@@ -34,20 +39,7 @@ int main() {
     finished = READ_MMIO_32(RAD_HOST_GPU_ALL_FINISHED);
   }
 
-#endif
-
-#if 0
-    tohost = 0;
-    *tocpu = tohost;
-
-    WRITE_MMIO_32(RAD_HOST_GPU_RESET, 0);
-
-    uint32_t finished = 0;
-    while (!finished) {
-        SYNC_GPU();
-        finished = READ_MMIO_32(RAD_HOST_GPU_ALL_FINISHED);
-    }
-#endif
-
+  WRITE_MMIO_32(RAD_HOST_GPU_RESET, 1);
+  tohost = 1;
   return 0;
 }
