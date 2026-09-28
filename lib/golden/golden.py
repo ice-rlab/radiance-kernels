@@ -268,19 +268,23 @@ def ensure_mx_golden():
 
 
 def mx_matmul(A_bytes, B_bytes, SA, SB, M, N, K, fmt="fp8",
-              out_fmt=None, tmpdir=None):
+              out_fmt=None, tmpdir=None, dim=None):
     """Run the MX-Gemmini matmul golden. A_bytes/B_bytes are the operand byte arrays
     (fp8: [M,K]/[K,N] uint8; sub-byte: nibble-packed A along M, B along N). SA/SB are
     e8m0 scale codes [K/32,M] / [K/32,N]. Returns C bf16 uint16 [M,N] when out_fmt is
-    None; when out_fmt is set (requant), returns (C_codes[M,N] uint8, C_scales[M,N/32] uint8)."""
+    None; when out_fmt is set (requant), returns (C_codes[M,N] uint8, C_scales[M,N/32] uint8).
+    dim is the Gemmini mesh dimension the golden models (16 = dim-16 tapeout mesh, 8 =
+    FireSimRadianceSingleClusterSyn); None takes $MX_GOLDEN_DIM, else 16."""
+    import os
+    dim = int(dim if dim is not None else os.environ.get("MX_GOLDEN_DIM", "16"))
     ensure_mx_golden()
-    tmp = pathlib.Path(tmpdir) if tmpdir else (_HERE / "_gen" / f"{fmt}_{M}_{N}_{K}")
+    tmp = pathlib.Path(tmpdir) if tmpdir else (_HERE / "_gen" / f"{fmt}_{M}_{N}_{K}_d{dim}")
     tmp.mkdir(parents=True, exist_ok=True)
     (tmp / "A.bin").write_bytes(np.ascontiguousarray(A_bytes).tobytes())
     (tmp / "B.bin").write_bytes(np.ascontiguousarray(B_bytes).tobytes())
     (tmp / "SA.bin").write_bytes(np.ascontiguousarray(SA).tobytes())
     (tmp / "SB.bin").write_bytes(np.ascontiguousarray(SB).tobytes())
-    env = {"PATH": "/usr/bin:/bin"}
+    env = {"PATH": "/usr/bin:/bin", "MX_GOLDEN_DIM": str(dim)}
     cbin = tmp / "C.bin"
     scbin = tmp / "C_scales.bin"
     if out_fmt is not None:

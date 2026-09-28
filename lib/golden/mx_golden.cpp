@@ -38,11 +38,16 @@
 #include <cmath>
 #include <cstring>
 
-static const int DIM = 16;    // Gemmini systolic dimension
+// Gemmini systolic dimension (mesh rows = PE tile size). 16 for the dim-16 tapeout mesh; set
+// MX_GOLDEN_DIM=8 for FireSimRadianceSingleClusterSyn (WithRadianceMxGemmini(dim = 8)).
+static int DIM = 16;
 static const int GROUP = 32;  // MX block-scaling group size
 
-// Per-column accumulator precision as partial sums flow down the 16-deep array.
+// Per-row accumulator precision as partial sums flow down the 16-deep array.
 // (spike libgemmini gemmini.cc::mx_loop_ws_spad)
+// A DIM-deep mesh uses the LAST DIM entries, i.e. row kk takes entry 16 - DIM + kk, matching
+// radiance Configs.scala's meshAccPrecisionList.takeRight(dim): the output row is always the
+// full-range e8 entry. At DIM = 16 this is exactly the original schedule.
 static const int ACC_E[16] = {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 8};
 static const int ACC_M[16] = {4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 6, 6, 6, 6, 6, 7};
 static const int PROD_E = 4, PROD_M = 3;
@@ -66,6 +71,14 @@ int main(int argc, char **argv) {
     return 1;
   }
   using namespace mx;
+  if (const char *d = getenv("MX_GOLDEN_DIM")) {
+    DIM = atoi(d);
+    // Ct[32][32] / A_col[32] and the 16-entry precision schedule bound DIM to divisors of 16.
+    if (DIM != 8 && DIM != 16) {
+      fprintf(stderr, "mx_golden: MX_GOLDEN_DIM must be 8 or 16 (got %s)\n", d);
+      return 1;
+    }
+  }
   const int M = atoi(argv[1]), N = atoi(argv[2]), K = atoi(argv[3]);
   if (M % DIM || N % DIM || K % DIM || K % GROUP) {
     fprintf(stderr, "mx_golden: M,N,K must be multiples of %d and K of %d\n", DIM, GROUP);
@@ -120,7 +133,8 @@ int main(int argc, char **argv) {
           float A_col[32], B_row[32];
           for (int r = 0; r < TILE; r++) A_col[r] = dec_a(i, r, k_outer, kk);
           for (int c = 0; c < TILE; c++) B_row[c] = dec_b(j, c, k_outer, kk);
-          const int ae = ACC_E[kk], am = ACC_M[kk];
+          // DIM-deep mesh: row kk uses the tail of the 16-entry schedule (see ACC_E/ACC_M above).
+          const int ae = ACC_E[16 - DIM + kk], am = ACC_M[16 - DIM + kk];
           for (int r = 0; r < TILE; r++)
             for (int c = 0; c < TILE; c++) {
               float p = mx_product_quantize_trunc(A_col[r] * B_row[c], PROD_E, PROD_M);

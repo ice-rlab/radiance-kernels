@@ -26,9 +26,9 @@ struct GemmConfig {
     bool ACC_TO_GMEM = false;
 
     constexpr bool IS_FP8() const { return DATATYPE == GemmDatatype::FP8; }
-    constexpr uint32_t PE_M() const { return (IS_FP8() ? 16 : 32); }
-    constexpr uint32_t PE_N() const { return (IS_FP8() ? 16 : 32); }
-    constexpr uint32_t PE_K() const { return 16; }
+    constexpr uint32_t PE_M() const { return (IS_FP8() ? DIM : 2 * DIM); }
+    constexpr uint32_t PE_N() const { return (IS_FP8() ? DIM : 2 * DIM); }
+    constexpr uint32_t PE_K() const { return DIM; }
     constexpr uint32_t PE_TILES_I() const { return TILE_M / PE_M(); }
     constexpr uint32_t PE_TILES_J() const { return TILE_N / PE_N(); }
     constexpr uint32_t PE_TILES_K() const { return TILE_K / PE_K(); }
@@ -136,18 +136,23 @@ static inline uint32_t sf_load(const uint8_t *base, size_t idx) {
 
 // GUARD: the scratchpad geometry must match the silicon we target.
 //
-// The tapeout SMEM is 128 KiB (radiance TapeoutSmemConfig: size = 128<<10, numBanks = 4),
-// so BANK_NUM(4) * BANK_ROWS(2048) * DIM(16) == 128 KiB. The mxgemmini `dev` line bumps
-// BANK_ROWS to 4096 for a *different*, 256 KiB rocket/spike config. Building against that
+// The tapeout SMEM is 128 KiB (radiance TapeoutSmemConfigDim8: size = 128<<10, numBanks = 4),
+// so BANK_NUM(4) * BANK_ROWS(4096) * DIM(8) == 128 KiB at this dim=8 target. (At dim=16,
+// the same 128 KiB invariant instead holds with BANK_ROWS=2048 -- BANK_ROWS=4096 is only
+// correct here because DIM also dropped to 8; the two must move together.) Separately, the
+// mxgemmini `dev` line bumps BANK_ROWS to 4096 while leaving DIM=16, for a *different*,
+// 256 KiB rocket/spike config -- that combination is NOT this one. Building against that
 // header here is silently catastrophic: `calculate_spad_addr` derives the B-operand base as
-// `BANK_NUM*BANK_ROWS - ...` (below), so a 4096 value places B outside the real scratchpad
-// and corrupts results in BOTH the RTL and the cyclotron co-model -- with no error anywhere.
-// A -DBANK_ROWS override cannot fix this (gemmini_params.h #defines it unconditionally, so
-// the header always wins); the submodule pin is the only lever. Fail loudly if it drifts.
+// `BANK_NUM*BANK_ROWS - ...` (below), so a mismatched value places B outside the real
+// scratchpad and corrupts results in BOTH the RTL and the cyclotron co-model -- with no error
+// anywhere. A -DBANK_ROWS override cannot fix this (gemmini_params.h #defines it
+// unconditionally, so the header always wins); the submodule pin is the only lever. Fail
+// loudly if it drifts.
 static_assert(BANK_NUM * BANK_ROWS * DIM == (128 * 1024),
               "scratchpad geometry != tapeout 128 KiB SMEM. Check the lib/mxgemmini pin: "
-              "the tapeout needs BANK_ROWS=2048 (dev-tip d3b3d10 uses 4096 for a 256 KiB "
-              "rocket/spike config and must NOT be used for radiance).");
+              "this dim=8 target needs BANK_ROWS=4096 with DIM=8 (dim=16 instead needs "
+              "BANK_ROWS=2048 with DIM=16; the dev-tip d3b3d10 BANK_ROWS=4096-with-DIM=16 "
+              "256 KiB rocket/spike config must NOT be used for radiance).");
 
 constexpr auto GEMMINI_FORMAT_FP8 = 0;
 constexpr auto GEMMINI_FORMAT_FP6 = 1;
@@ -785,7 +790,9 @@ void mxgemm_single_output_tile(const uint32_t dim_m, const uint32_t dim_n,
         }
     }
 
-    gemmini_fence();
+    // The last k-tile's accumulator->SMEM stores must all have landed before mxgemm() copies C
+    // out of SMEM; a single busy == 0 read does not guarantee that (see gemmini_drain()).
+    gemmini_drain();
 
     asm volatile ("main_matmul_k_loop_end_%=:" :: );
 
@@ -834,6 +841,19 @@ mxgemm(const uint32_t dim_m, const uint32_t dim_n, const uint32_t dim_k,
             copy_smem_to_gmem_simt<C.TILE_M_QUANT(), C.TILE_N_QUANT(),
                                    C.OUT_ELEM_SIZE()>(
                 C_smem, C_gmem, tid_in_threadblock, threads_per_threadblock);
+#ifdef MXGEMM_DIAG_LATE_COPY
+            // DIAGNOSTIC: copy C again after a long delay, a fence and a barrier, into
+            // C_gmem + 0x10000. If this late copy is complete while the first is not, the first
+            // copy raced the accumulator->SMEM stores. Every thread runs the same loop, so there
+            // is no tid-divergent code before the barrier.
+            for (volatile uint32_t d = 0; d < MXGEMM_DIAG_LATE_COPY; d++) {
+            }
+            gemmini_fence();
+            mu_barrier(3, warps_per_threadblock);
+            copy_smem_to_gmem_simt<C.TILE_M_QUANT(), C.TILE_N_QUANT(),
+                                   C.OUT_ELEM_SIZE()>(
+                C_smem, C_gmem + 0x10000, tid_in_threadblock, threads_per_threadblock);
+#endif
         } else {
             // copy_accmem_to_gmem_dma_sync<C>(C_gmem, dim_n, tid_in_threadblock);
             copy_C_smem_to_gmem_dma_sync<C>(C.SPAD_DEST(), C_gmem, dim_n,

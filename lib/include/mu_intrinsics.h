@@ -108,9 +108,9 @@ static void mu_barrier(unsigned barried_id, unsigned num_warps) {
 
 // This hard-codes hardware config into kernel, but this allows efficient
 // compile-time unrolling and constant propagation.
-#define MU_NUM_THREADS 16
+#define MU_NUM_THREADS 8
 #define MU_NUM_WARPS 8
-#define MU_NUM_CORES 2
+#define MU_NUM_CORES 1
 #define MU_NUM_MAX_WARPS 8
 #define MU_NUM_CLUSTERS 1
 #define MU_BLOCK_NUM_WARPS(n) (MU_NUM_CORES * (n))

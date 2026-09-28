@@ -21,9 +21,10 @@ int main(void) {
         SYNC_GPU();
         finished = READ_MMIO_32(RAD_HOST_GPU_ALL_FINISHED);
     }
-    printf("finished\n");
+    
 
     WRITE_MMIO_32(RAD_HOST_GPU_RESET, 1);
+    printf("finished\n");
     tohost = 1;
     return 0;
 }

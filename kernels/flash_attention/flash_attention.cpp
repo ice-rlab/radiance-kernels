@@ -46,7 +46,15 @@ int main() {
     };
 
     // TODO: &arg may come from the CPU
-    mu_schedule(kernel_entry, &arg, vx_num_warps());
+    // TEST: restored to full occupancy (8) to empirically re-check the
+    // globalOverSubscription assertion in Rename.scala. Per-function register
+    // accounting (only the initiating warp runs _start/init_regs/main/
+    // mu_schedule; the other vx_wspawn'd warps start straight at
+    // mu_schedule_workers and never touch that setup path) predicts
+    // 33 (warp 0) + 30*(occupancy-1) = 243 at occupancy=8, which is UNDER
+    // numPhysRegs (256) -- contradicting the assertion we originally observed
+    // at this same occupancy. Rebuilding at 8 to see whether it still fires.
+    mu_schedule(kernel_entry, &arg, 8);
 
     return 0;
 }

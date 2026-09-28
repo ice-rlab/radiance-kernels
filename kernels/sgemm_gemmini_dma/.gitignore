@@ -1,5 +1,0 @@
-*.bin
-*.dump
-*.elf
-sgemm_gemmini_dma
-.depend

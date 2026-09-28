@@ -34,3 +34,10 @@ MXGEMM_MU_OBJS := $(addsuffix .mu.o,$(basename $(MU_SRCS)))
 $(MXGEMM_MU_OBJS): ../../lib/mxgemm/mxgemm_lib.hpp
 
 include ../common.mk
+
+# Host-only defines (empty by default). Every *.soc.elf here links the same host.host.o, so
+# delete it and rebuild only the one target when setting this, e.g.
+#   rm -f host.host.o && make mxgemm.fp8.m64n64k128.tm64tn64tk64.fullout.soc.elf \
+#       MXGEMM_HOST_DEFS=-DMXGEMM_VERIFY_M64N64K128
+# Appended after the include so it adds to, rather than replaces, common.mk's HOST_CXXFLAGS.
+HOST_CXXFLAGS += $(MXGEMM_HOST_DEFS)

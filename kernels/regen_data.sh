@@ -52,13 +52,6 @@ blob() {  # <dir> <fmt> <M> <N> <K> [gemv]
     } >> "$K/$dir/data"
   fi
 }
-blob gemm_mxgemmini_ws              fp8 256  64 2048
-# gemm_mxgemmini_ws_restream: data kept committed (custom A_scales_tiled re-tiling not
-# modeled by gen_mxgemm_data.py); see the gitignore exception.
-blob gemm_mxgemmini_ws_downproj_fp4 fp4 256  64 5632
-blob gemv_batched_fp8_m32           fp8  32 128 2048 gemv
-blob gemv_batched_fp8_m64           fp8  64 128 2048 gemv
-blob gemv_batched_fp8_m128          fp8 128 128 2048 gemv
-blob gemv_batched_fp4_m128          fp4 128 128 2048 gemv
+
 
 echo "[regen] done."

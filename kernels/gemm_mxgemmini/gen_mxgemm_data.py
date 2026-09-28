@@ -80,7 +80,12 @@ def gen(fmt, M, N, K):
     SA = rng.integers(0x7B, 0x83, size=(GK, M), dtype=np.uint8)
     SB = rng.integers(0x7B, 0x83, size=(GK, N), dtype=np.uint8)
 
-    tmp = HERE / "_gen" / f"{fmt}_{M}_{N}_{K}"
+    # Gemmini mesh dim the golden models: 16 (default, dim-16 mesh) or 8
+    # (FireSimRadianceSingleClusterSyn). Must match the bitstream the header is checked on.
+    import os
+    dim = os.environ.get("MX_GOLDEN_DIM", "16")
+
+    tmp = HERE / "_gen" / f"{fmt}_{M}_{N}_{K}_d{dim}"
     tmp.mkdir(parents=True, exist_ok=True)
     (tmp / "A.bin").write_bytes(A.tobytes())
     (tmp / "B.bin").write_bytes(B.tobytes())
@@ -88,7 +93,7 @@ def gen(fmt, M, N, K):
     (tmp / "SB.bin").write_bytes(SB.tobytes())
 
     def run_golden(out_fmt, cbin, sbin=None):
-        env = {"PATH": "/usr/bin:/bin"}
+        env = {"PATH": "/usr/bin:/bin", "MX_GOLDEN_DIM": dim}
         if out_fmt is not None:
             env["MX_OUT_FMT"] = str(out_fmt)
             if sbin:

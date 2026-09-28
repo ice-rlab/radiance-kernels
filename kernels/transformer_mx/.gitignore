@@ -1,0 +1,9 @@
+# Generated inputs -- regenerate instead of committing:
+#   include/tf_data.h    python3 gen_data.py
+#   include/tf_golden.h  python3 golden_tf.py --emit include/tf_golden.h
+#   include/tf_syms.h    make (extracted from kernel.radiance.elf)
+include/tf_data.h
+include/tf_golden.h
+include/tf_syms.h
+__pycache__/
+host_debug_backup.cpp

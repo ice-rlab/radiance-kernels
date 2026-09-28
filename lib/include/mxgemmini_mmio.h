@@ -76,6 +76,19 @@ inline void gemmini_fence() {
         asm volatile("nop");
     }
 }
+// Strict drain: return only after `busy` has read 0 on GEMMINI_DRAIN_QUIET consecutive polls.
+// A single zero read is not enough to know Gemmini finished: busy rises several cycles after the
+// command that starts a loop, and can fall while the last scratchpad stores are still in the
+// cluster's TileLink buffers. On FireSimRadianceSingleClusterSyn the bare gemmini_fence() let the
+// SMEM->GMEM copy of an fp8 64x64 GEMM run while rows 32-63 were still being stored (2026-09-17).
+#ifndef GEMMINI_DRAIN_QUIET
+#define GEMMINI_DRAIN_QUIET 1024
+#endif
+inline void gemmini_drain() {
+    for (uint32_t quiet = 0; quiet < GEMMINI_DRAIN_QUIET;) {
+        quiet = (load32_shared(GEMMINI_BUSY_ADDR) != 0) ? 0 : quiet + 1;
+    }
+}
 inline void gemmini_fence_waitcount(const int n) {
     while (load32_shared(GEMMINI_OCCUPANCY_ADDR) > n) {
         asm volatile("nop");
