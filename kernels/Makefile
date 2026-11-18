@@ -9,6 +9,7 @@ SUBDIRS := bfs \
 	flash_attention_mx_stable \
 	fmastore \
 	gaussian \
+	gcstack_ubench \
 	geglu \
 	gemma_4norm \
 	gemm_mxgemmini \

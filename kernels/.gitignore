@@ -27,3 +27,6 @@
 **/include/fa_data.h
 gemm_mxgemmini/mxgemm.data.fp8.*.h
 gemm_mxgemmini/mxgemm.data.fp4.*.h
+
+# python bytecode
+**/__pycache__/
